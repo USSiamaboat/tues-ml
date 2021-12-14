@@ -19,8 +19,9 @@ st.set_page_config(layout='wide', initial_sidebar_state='collapsed', page_title=
 st.header("Tuesday ML (BETA)")
 with st.expander("About"):
 	st.write("This is an app designed to make machine learning easier and more accessible. So far, you can only " +
-			"train multilayer perceptron neural networks, but we will add more later. Sample data and models "+
-			"will be available soon along with bugfixes for things that are breaking.")
+			"train multilayer perceptron neural networks, but we will add more later. Sample data is available below " +
+			" and sample models and model uploading will be available soon")
+	st.download_button("Sample data", open('Classification data.csv'), file_name="Classification data.csv")
 
 def to_data(args):
 	man_type = "Auto"
