@@ -20,8 +20,12 @@ st.header("Tuesday ML (BETA)")
 with st.expander("About"):
 	st.write("This is an app designed to make machine learning easier and more accessible. So far, you can only " +
 			"train multilayer perceptron neural networks, but we will add more later. Sample data is available below " +
-			" and sample models and model uploading will be available soon")
+			" and sample models and model uploading will be available soon. Please keep in mind this is a " +
+			"beta release and is still in development. This app was make with and is hosted on Streamlit, a " + 
+			"library that makes it easier to display web user interfaces and data with python.")
 	st.download_button("Sample data", open('Classification data.csv'), file_name="Classification data.csv")
+
+st.markdown("---")
 
 def to_data(args):
 	man_type = "Auto"
