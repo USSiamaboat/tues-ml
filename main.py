@@ -417,4 +417,4 @@ st.header("Export")
 
 st.download_button("Download Model", data=pickle.dumps(model), file_name="model.joblib")
 
-st.write("I have no idea what else to put here")
+st.write("Direct input and model uploading coming soon")
