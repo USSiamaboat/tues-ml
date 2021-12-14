@@ -14,7 +14,13 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(layout='wide', initial_sidebar_state='collapsed', page_title="Tuesday ML")
 
-# Menu and Sidebar
+# Header and info
+
+st.header("Tuesday ML (BETA)")
+with st.expander("About"):
+	st.write("This is an app designed to make machine learning easier and more accessible. So far, you can only " +
+			"train multilayer perceptron neural networks, but we will add more later. Sample data and models "+
+			"will be available soon along with bugfixes for things that are breaking.")
 
 def to_data(args):
 	man_type = "Auto"
