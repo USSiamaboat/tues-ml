@@ -14,6 +14,9 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(layout='wide', initial_sidebar_state='collapsed', page_title="Tuesday ML")
 
+regressor_type = "<class 'sklearn.neural_network._multilayer_perceptron.MLPRegressor'>"
+classifier_type = "<class 'sklearn.neural_network._multilayer_perceptron.MLPClassifier'>"
+
 # Header and info
 
 st.header("Tuesday ML (BETA)")
@@ -21,7 +24,7 @@ with st.expander("About"):
 	st.write("This is an app designed to make machine learning easier and more accessible. So far, you can only " +
 			"train multilayer perceptron neural networks, but we will add more later. Sample data is available below " +
 			" and sample models and model uploading will be available soon. Please keep in mind this is a " +
-			"beta release and is still in development. This app was make with and is hosted on Streamlit, a " + 
+			"beta release and is still in development. This app was make with and is hosted on Streamlit, a " +
 			"library that makes it easier to display web user interfaces and data with python.")
 	st.download_button("Sample data", open('Classification data.csv'), file_name="Classification data.csv")
 
@@ -46,6 +49,17 @@ def to_data(args):
 		}
 		return out
 
+def model_inputter(container, model_):
+	container.subheader("Model")
+	with container:
+		input_, output_ = st.columns([1, 3])
+		with input_:
+			with st.expander("Inputs:", True):
+				input_arr_ = [st.number_input("Input "+str(i_)) for i_ in range(model_.n_features_in_)]
+		with output_:
+			with st.expander("Output:", True):
+				st.write(model_.predict(np.array(input_arr_).reshape((1, -1))))
+
 # Data
 
 data_is_ready = False
@@ -55,16 +69,21 @@ data = []
 st.header("Data")
 data_col1, data_col2 = st.columns([1, 2])
 with data_col1:
-	st.subheader("Upload data")
-	raw_file = st.file_uploader("", ["csv"])
+	st.subheader("Upload data or model")
+	raw_file = st.file_uploader("", ["csv", "joblib"])
 	if raw_file is not None:
-		file = pd.read_csv(raw_file)
-		with st.expander('Raw Data Preview'):
-			shown_rows = st.slider("Shown rows: ", min(len(file), 5), len(file))
-			st.table(file.head(shown_rows))
-		if len(file.columns) < 2:
-			st.error("Data must have at least 2 columns")
-			st.stop()
+		if raw_file.name.endswith(".csv"):
+			file = pd.read_csv(raw_file)
+			with st.expander('Raw Data Preview'):
+				shown_rows = st.slider("Shown rows: ", min(len(file), 5), len(file))
+				st.table(file.head(shown_rows))
+			if len(file.columns) < 2:
+				st.error("Data must have at least 2 columns")
+				st.stop()
+if raw_file is not None and raw_file.name.endswith(".joblib"):
+	model = pickle.load(raw_file)
+	model_inputter(st.container(), model)
+	st.stop()
 with data_col2:
 	st.subheader("Edit data")
 	
@@ -75,8 +94,8 @@ with data_col2:
 			data_is_ready = True
 			data = pd.DataFrame(to_data([]))
 		if data_man == "History":
-			data_is_ready = True
-			st.write("add this later")
+			# data_is_ready = True
+			st.write("This is not done yet, check back later")
 		elif data_man == "Multiple":
 			x_cols = st.multiselect("Select input columns: ", file.columns)
 			
@@ -348,9 +367,6 @@ except:
 
 model_col1, model_col2, model_col3 = st.columns([1, 0.8, 1.2])
 
-regressor_type = "<class 'sklearn.neural_network._multilayer_perceptron.MLPRegressor'>"
-classifier_type = "<class 'sklearn.neural_network._multilayer_perceptron.MLPClassifier'>"
-
 true_model_type = str(type(model))
 
 with model_col1:
@@ -417,4 +433,4 @@ st.header("Export")
 
 st.download_button("Download Model", data=pickle.dumps(model), file_name="model.joblib")
 
-st.write("Direct input and model uploading coming soon")
+model_inputter(st.container(), model)
