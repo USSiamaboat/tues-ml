@@ -169,7 +169,7 @@ if st.checkbox("Show Advanced"):
 			"SGD with ADAM": "adam"
 		}
 		solver = solver_conversion[solver_]
-		epochs = st.slider("Epochs", 100, 1000000, value=100000)
+		epochs = st.slider("Max-Epochs", 100, 1000000, value=100000)
 		regularization = st.slider("L2 Regularization Term", 0.0001, 0.01, 0.0001, 0.0001, format="%e")
 
 else:
@@ -293,9 +293,8 @@ def calc_best_iter_model(iters):
 	global model
 	global losses
 	best_model = 0
-	best_metric = -1
+	best_metric = 99999
 	loss_arr = []
-	roc_arr = []
 	with loading_space.container():
 		st.subheader("Training "+str(iters)+" iterations...")
 		prog_bar = st.progress(0.0)
@@ -316,17 +315,17 @@ def calc_best_iter_model(iters):
 		loss_arr.append(np.array(local_model.loss_curve_))
 		_y_pred = local_model.predict(X_test)
 		_y_pred_proba = local_model.predict_proba(X_test)
-		if model_type == "Regression":
-			_metric = mean_squared_error(y_test, _y_pred)
-		else:
-			_metric = accuracy_score(y_test, _y_pred)
-		if _metric >= best_metric:
-			best_metric = _metric
+		print(local_model)
+		if local_model.best_loss_ < best_metric:
+			best_metric = local_model.best_loss_
 			best_model = local_model
+		print(local_model)
 		prog_bar.progress((j+1)/iters)
 	st.session_state['train_iter'] = str(int(st.session_state['train_iter']) + 1)
 	st.session_state['from_saved'] = "1"
 	model = best_model
+	print("model asdf")
+	print(best_model)
 	get_model(st.session_state['train_iter'])
 	st.session_state['from_saved'] = "0"
 	
@@ -348,7 +347,7 @@ def calc_best_iter_model(iters):
 	
 	losses = np.mean(new_loss_arr, axis=0)
 	get_losses(st.session_state['train_iter'])
-	return 0
+	return "bruh"
 
 try:
 	model = get_model(st.session_state['train_iter'])
@@ -361,7 +360,7 @@ except:
 	def try_again():
 		st.session_state['train_iter'] = str(int(st.session_state['train_iter']) + 1)
 		get_model(st.session_state['train_iter'])
-	
+
 	st.button("Try again", on_click=try_again)
 	st.stop()
 
@@ -381,6 +380,7 @@ with model_col1:
 
 with model_col2:
 	st.subheader("Metrics")
+	st.write("Epochs to converge: ", model.n_iter_)
 	try:
 		if true_model_type == regressor_type:
 			st.write("Train MSE: ", mean_squared_error(y_train, y_train_pred))
