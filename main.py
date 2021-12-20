@@ -139,15 +139,15 @@ st.markdown("---")
 
 st.header("Design")
 
-with st.expander("Data Split", True):
+with st.expander("Data Split"):
 	train_percent = st.slider("Training Data Proportion: ", 0.0, 1.0, 0.8, 0.01)
 	st.write("Train Length: "+str(int(np.floor(train_percent*len(data["X"])))))
 	st.write("Test Length: "+str(len(data["X"])-int(np.floor(train_percent*len(data["X"])))))
 
-with st.expander("Configure Layers", True):
+with st.expander("Configure Layers"):
 	design_col1, design_col2 = st.columns([1, 2])
 	with design_col1:
-		num_layers = st.slider("Total Layers: ", 2, 20)
+		num_layers = st.slider("Total Layers: ", 2, 20, value=5)
 
 	with design_col2:
 		layers = []
@@ -157,7 +157,7 @@ with st.expander("Configure Layers", True):
 			elif i == len(range(num_layers))-1:
 				st.write("Output Nodes: "+str(len(data["y"][0])))
 			else:
-				layers.append(st.slider("Layer "+str(i)+" Nodes: ", 1, 10))
+				layers.append(st.slider("Layer "+str(i)+" Nodes: ", 1, 10, value=5))
 
 if st.checkbox("Show Advanced"):
 	with st.expander("Advanced", True):
@@ -193,6 +193,33 @@ if not design_is_ready:
 st.markdown("---")
 
 # Train
+
+default_args = {
+	"hidden_layers": layers,
+	"alpha": regularization,
+	"learning_rate_init": 0.001
+}
+
+def generate_model(hyper_params):
+	if model_type == "Regression":
+		return MLPRegressor(**hyper_params)
+	elif model_type == "Classification":
+		return MLPClassifier(**hyper_params)
+
+def search(hyper_params_list, iters):
+	best_hyper_params = {}
+	best_loss = 9999999999999999999999999
+	for hyper_params in hyper_params_list:
+		average_loss = 0
+		for _i_ in range(iters):
+			local_model = generate_model(hyper_params=hyper_params)
+			local_model.fit(X_train, y_train)
+			average_loss += local_model.best_loss_
+		average_loss = average_loss/iters
+		if average_loss <= best_loss:
+			best_loss = average_loss
+			best_hyper_params = hyper_params
+	return best_hyper_params
 
 st.header("Train & Validate")
 
@@ -315,17 +342,13 @@ def calc_best_iter_model(iters):
 		loss_arr.append(np.array(local_model.loss_curve_))
 		_y_pred = local_model.predict(X_test)
 		_y_pred_proba = local_model.predict_proba(X_test)
-		print(local_model)
 		if local_model.best_loss_ < best_metric:
 			best_metric = local_model.best_loss_
 			best_model = local_model
-		print(local_model)
 		prog_bar.progress((j+1)/iters)
 	st.session_state['train_iter'] = str(int(st.session_state['train_iter']) + 1)
 	st.session_state['from_saved'] = "1"
 	model = best_model
-	print("model asdf")
-	print(best_model)
 	get_model(st.session_state['train_iter'])
 	st.session_state['from_saved'] = "0"
 	
@@ -364,7 +387,7 @@ except:
 	st.button("Try again", on_click=try_again)
 	st.stop()
 
-model_col1, model_col2, model_col3 = st.columns([1, 0.8, 1.2])
+model_col1, model_col2 = st.columns([1, 2])
 
 true_model_type = str(type(model))
 
@@ -374,37 +397,47 @@ with model_col1:
 		st.button("Re-train", on_click=train_button)
 	
 	with st.expander("Best from iterations", True):
-		st.write("Note: This may take a very long time")
 		train_iters = st.slider("Iterations: ", 5, 200, 50, 5)
 		st.button("Start", on_click=calc_best_iter_model, args=(train_iters, ))
+	
+	hyperparam_tuning = st.checkbox("Enable Hyperparameter Tuning")
+	
+	if hyperparam_tuning:
+		with st.expander("Hyperparameter Tuning", True):
+			st.write("Tuned hyperparameters may optionally be applied to your model")
+			sweep_iters = st.slider("Sweep Iterations", 5, 100, value=50)
+			possible_hyperparams = ["Model Depth", "Layer Size", "Regularization", "Learning Rate"]
+			need_tuning_hyperparams = {}
+			for possible_hyperparam in possible_hyperparams:
+				need_tuning_hyperparams[possible_hyperparam] = st.checkbox(possible_hyperparam)
+			if st.button("Run Sweep"):
+				st.info("Coming soon")
 
 with model_col2:
-	st.subheader("Metrics")
-	st.write("Epochs to converge: ", model.n_iter_)
-	try:
-		if true_model_type == regressor_type:
-			st.write("Train MSE: ", mean_squared_error(y_train, y_train_pred))
-			st.write("Train MAE: ", mean_absolute_error(y_train, y_train_pred))
-			st.write("Test MSE: ", mean_squared_error(y_test, y_pred))
-			st.write("Test MAE: ", mean_absolute_error(y_test, y_pred))
-		elif true_model_type == classifier_type:
-			y_pred_proba = model.predict_proba(X_test)
-			st.write("Train Accuracy: ", accuracy_score(y_train, y_train_pred))
-			st.write("Test Accuracy: ", accuracy_score(y_test, y_pred))
-			st.write("ROC AUC: ", roc_auc_score(y_test, y_pred_proba, multi_class="ovr"))
-	except:
-		st.error("Error while evaluating metrics")
-
-with model_col3:
-	st.subheader("Graphs")
-	try:
-		if true_model_type == classifier_type:
-			allowed_graphs = ["ROC", "Loss"]
-		else:
-			allowed_graphs = ["Loss"]
-		graph_type = st.selectbox("Graph type: ", allowed_graphs)
-		if graph_type == "ROC":
-			with st.expander("ROC Graph", True):
+	st.subheader("Evaluation")
+	with st.expander("Metrics", True):
+		st.write("Epochs to converge: ", model.n_iter_)
+		try:
+			if true_model_type == regressor_type:
+				st.write("Train MSE: ", mean_squared_error(y_train, y_train_pred))
+				st.write("Train MAE: ", mean_absolute_error(y_train, y_train_pred))
+				st.write("Test MSE: ", mean_squared_error(y_test, y_pred))
+				st.write("Test MAE: ", mean_absolute_error(y_test, y_pred))
+			elif true_model_type == classifier_type:
+				y_pred_proba = model.predict_proba(X_test)
+				st.write("Train Accuracy: ", accuracy_score(y_train, y_train_pred))
+				st.write("Test Accuracy: ", accuracy_score(y_test, y_pred))
+				st.write("ROC AUC: ", roc_auc_score(y_test, y_pred_proba, multi_class="ovr"))
+		except:
+			st.error("Error while evaluating metrics")
+	with st.expander("Graphs", True):
+		try:
+			if true_model_type == classifier_type:
+				allowed_graphs = ["Loss", "ROC"]
+			else:
+				allowed_graphs = ["Loss"]
+			graph_type = st.selectbox("Graph type: ", allowed_graphs)
+			if graph_type == "ROC":
 				pos_val = st.selectbox("Positive Value: ", model.classes_)
 				pos_val_i = model.classes_.tolist().index(pos_val)
 				pos_rates = calc_roc_curve(pos_val_i, y_pred_proba)
@@ -413,8 +446,7 @@ with model_col3:
 				ax.plot([0, 1], [0, 1], label="Random Cls")
 				ax.legend()
 				st.pyplot(fig)
-		else:
-			with st.expander("Loss", True):
+			else:
 				fig, ax = plt.subplots()
 				ax.plot(model.loss_curve_, label='Model')
 				losses = get_losses(st.session_state['train_iter'])
@@ -422,8 +454,8 @@ with model_col3:
 					ax.plot(losses, label='Average')
 				ax.legend()
 				st.pyplot(fig)
-	except:
-		st.error("Error while rendering graphs")
+		except:
+			st.error("Error while rendering graphs")
 
 st.markdown("---")
 
