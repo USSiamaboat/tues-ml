@@ -17,6 +17,14 @@ st.set_page_config(layout='wide', initial_sidebar_state='collapsed', page_title=
 regressor_type = "<class 'sklearn.neural_network._multilayer_perceptron.MLPRegressor'>"
 classifier_type = "<class 'sklearn.neural_network._multilayer_perceptron.MLPClassifier'>"
 
+hide_streamlit_style = """
+			<style>
+			#MainMenu {visibility: hidden;}
+			footer {visibility: hidden;}
+			</style>
+			"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
+
 # Header and info
 
 st.header("Tuesday ML (BETA)")
@@ -194,33 +202,6 @@ st.markdown("---")
 
 # Train
 
-default_args = {
-	"hidden_layers": layers,
-	"alpha": regularization,
-	"learning_rate_init": 0.001
-}
-
-def generate_model(hyper_params):
-	if model_type == "Regression":
-		return MLPRegressor(**hyper_params)
-	elif model_type == "Classification":
-		return MLPClassifier(**hyper_params)
-
-def search(hyper_params_list, iters):
-	best_hyper_params = {}
-	best_loss = 9999999999999999999999999
-	for hyper_params in hyper_params_list:
-		average_loss = 0
-		for _i_ in range(iters):
-			local_model = generate_model(hyper_params=hyper_params)
-			local_model.fit(X_train, y_train)
-			average_loss += local_model.best_loss_
-		average_loss = average_loss/iters
-		if average_loss <= best_loss:
-			best_loss = average_loss
-			best_hyper_params = hyper_params
-	return best_hyper_params
-
 st.header("Train & Validate")
 
 loading_space = st.empty()
@@ -372,6 +353,33 @@ def calc_best_iter_model(iters):
 	get_losses(st.session_state['train_iter'])
 	return "bruh"
 
+default_args = {
+	"hidden_layers": layers,
+	"alpha": regularization,
+	"learning_rate_init": 0.001
+}
+
+def generate_model(hyper_params):
+	if model_type == "Regression":
+		return MLPRegressor(**hyper_params)
+	elif model_type == "Classification":
+		return MLPClassifier(**hyper_params)
+
+def search(hyper_params_list, iters):
+	best_hyper_params = {}
+	best_loss = 9999999999999999999999999
+	for hyper_params in hyper_params_list:
+		average_loss = 0
+		for _i_ in range(iters):
+			local_model = generate_model(hyper_params=hyper_params)
+			local_model.fit(X_train, y_train)
+			average_loss += local_model.best_loss_
+		average_loss = average_loss/iters
+		if average_loss <= best_loss:
+			best_loss = average_loss
+			best_hyper_params = hyper_params
+	return best_hyper_params
+
 try:
 	model = get_model(st.session_state['train_iter'])
 	
@@ -391,6 +399,55 @@ model_col1, model_col2 = st.columns([1, 2])
 
 true_model_type = str(type(model))
 
+
+def generate_model_depth_hyperparams(arr_, sweep_depth_):
+	out_arr = []
+	
+	# TODO: Smart default layer detection and implementation
+	default_layer = np.round(np.average(layers))
+	
+	new_num_layers = np.arange(1, 1+sweep_depth_)
+	
+	# Generate default layers
+	layer_arrs = []
+	for num_layers_ in new_num_layers:
+		layer_arrs.append(np.multiply(np.ones(num_layers_), default_layer))
+	
+	# Add all combinations of hyperparameters to existing hyperparameters
+	for hypers in arr_:
+		for layer_arr in layer_arrs:
+			temp = hypers
+			temp["hidden_layers"] = layer_arr
+			out_arr.append(temp)
+	return out_arr
+
+def generate_regularization_hyperparams(arr_, sweep_depth_):
+	out_arr = []
+	
+	# Generates [0.0001 ... 0.001]
+	reg_vals = np.multiply(np.arange(1, 1+sweep_depth_), 0.0001)
+	
+	for hypers in arr_:
+		for reg_val in reg_vals:
+			temp = hypers
+			temp["alpha"] = reg_val
+			out_arr.append(temp)
+	return out_arr
+
+
+def generate_learning_rate_hyperparams(arr_, sweep_depth_):
+	out_arr = []
+	
+	# Generates [0.001 ... 0.03]
+	rate_vals = np.multiply(np.add(np.multiply(np.arange(0, sweep_depth_), 3), 1), 0.001)
+	
+	for hypers in arr_:
+		for rate_val in rate_vals:
+			temp = hypers
+			temp["learning_rate_init"] = rate_val
+			out_arr.append(temp)
+	return out_arr
+
 with model_col1:
 	st.subheader("Training")
 	with st.expander("Single iteration", True):
@@ -405,8 +462,8 @@ with model_col1:
 	if hyperparam_tuning:
 		with st.expander("Hyperparameter Tuning", True):
 			st.write("Tuned hyperparameters may optionally be applied to your model")
-			sweep_iters = st.slider("Sweep Iterations", 5, 100, value=50)
-			possible_hyperparams = ["Model Depth", "Layer Size", "Regularization", "Learning Rate"]
+			sweep_depth = st.slider("Sweep Depth", 1, 10, value=5)
+			possible_hyperparams = ["Layer Size", "Model Depth", "Regularization", "Learning Rate"]
 			need_tuning_hyperparams = {}
 			for possible_hyperparam in possible_hyperparams:
 				need_tuning_hyperparams[possible_hyperparam] = st.checkbox(possible_hyperparam)
