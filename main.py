@@ -23,7 +23,7 @@ hide_streamlit_style = """
 			footer {visibility: hidden;}
 			</style>
 			"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # Header and info
 
@@ -322,7 +322,8 @@ def calc_best_iter_model(iters):
 		local_model.fit(X_train, y_train)
 		loss_arr.append(np.array(local_model.loss_curve_))
 		_y_pred = local_model.predict(X_test)
-		_y_pred_proba = local_model.predict_proba(X_test)
+		if model_type == "Classification":
+			_y_pred_proba = local_model.predict_proba(X_test)
 		if local_model.best_loss_ < best_metric:
 			best_metric = local_model.best_loss_
 			best_model = local_model
@@ -338,18 +339,21 @@ def calc_best_iter_model(iters):
 		if len(loss_) > max_loss_len:
 			max_loss_len = len(loss_)
 	
-	new_loss_arr = []
+	# Find average loss from past iters
+	loss_arr_lens = [len(loss_) for loss_ in loss_arr]
 	
-	def np_to_shape(arr, target_len):
-		arr = arr.tolist()
-		for unused_var in range(target_len - len(arr)):
-			arr.append(0)
-		return np.array(arr)
+	sums_ = np.zeros(max(loss_arr_lens))
+	num_ = np.zeros(max(loss_arr_lens))
 	
 	for loss_ in loss_arr:
-		new_loss_arr.append(np_to_shape(loss_, max_loss_len))
+		for j, n in enumerate(loss_):
+			sums_[j] += n
+			num_[j] += 1
 	
-	losses = np.mean(new_loss_arr, axis=0)
+	losses = []
+	for j, sum_ in enumerate(sums_):
+		losses.append(sum_/max(num_[j], 0.0000001))
+	
 	get_losses(st.session_state['train_iter'])
 	return "bruh"
 
@@ -366,16 +370,22 @@ def generate_model(hyper_params):
 		return MLPClassifier(**hyper_params)
 
 def search(hyper_params_list, iters):
+	global hyperparam_tuning_bar
+	
 	best_hyper_params = {}
 	best_loss = 9999999999999999999999999
-	for hyper_params in hyper_params_list:
+	for j, hyper_params in enumerate(hyper_params_list):
+		hyperparam_tuning_bar.progress(j/len(hyper_params_list))
 		average_loss = 0
 		for _i_ in range(iters):
 			local_model = generate_model(hyper_params=hyper_params)
 			local_model.fit(X_train, y_train)
-			average_loss += local_model.best_loss_
+			try:
+				average_loss += local_model.best_loss_
+			except:
+				average_loss += local_model.loss_
 		average_loss = average_loss/iters
-		if average_loss <= best_loss:
+		if average_loss < best_loss:
 			best_loss = average_loss
 			best_hyper_params = hyper_params
 	return best_hyper_params
@@ -400,53 +410,93 @@ model_col1, model_col2 = st.columns([1, 2])
 true_model_type = str(type(model))
 
 
-def generate_model_depth_hyperparams(arr_, sweep_depth_):
+def generate_architecture():
 	out_arr = []
 	
-	# TODO: Smart default layer detection and implementation
-	default_layer = np.round(np.average(layers))
+	# Somehow find the best candidates for search
 	
-	new_num_layers = np.arange(1, 1+sweep_depth_)
-	
-	# Generate default layers
-	layer_arrs = []
-	for num_layers_ in new_num_layers:
-		layer_arrs.append(np.multiply(np.ones(num_layers_), default_layer))
-	
-	# Add all combinations of hyperparameters to existing hyperparameters
-	for hypers in arr_:
-		for layer_arr in layer_arrs:
-			temp = hypers
-			temp["hidden_layers"] = layer_arr
-			out_arr.append(temp)
 	return out_arr
 
-def generate_regularization_hyperparams(arr_, sweep_depth_):
+def generate_activation():
+	out_arr = []
+	
+	activation_vals_ = ["identity", "logistic", "tanh", "relu"]
+	
+	for activation_val_ in activation_vals_:
+		temp_ = {}
+		temp_["activation"] = activation_val_
+		out_arr.append(temp_)
+	
+	return out_arr
+
+def generate_solver():
+	out_arr = []
+	
+	solver_vals_ = ["lbfgs", "sgd", "adam"]
+	
+	for solver_val_ in solver_vals_:
+		temp_ = {}
+		temp_["solver"] = solver_val_
+		out_arr.append(temp_)
+	
+	return out_arr
+
+def generate_regularization_hyperparams():
+	global sweep_depth
 	out_arr = []
 	
 	# Generates [0.0001 ... 0.001]
-	reg_vals = np.multiply(np.arange(1, 1+sweep_depth_), 0.0001)
+	reg_vals = np.multiply(np.arange(1, 1+sweep_depth), 0.0001)
 	
-	for hypers in arr_:
-		for reg_val in reg_vals:
-			temp = hypers
-			temp["alpha"] = reg_val
-			out_arr.append(temp)
+	for reg_val in reg_vals:
+		temp_ = {}
+		temp_["alpha"] = reg_val
+		out_arr.append(temp_)
+	
 	return out_arr
 
 
-def generate_learning_rate_hyperparams(arr_, sweep_depth_):
+def generate_learning_rate_hyperparams():
+	global sweep_depth
 	out_arr = []
 	
 	# Generates [0.001 ... 0.03]
-	rate_vals = np.multiply(np.add(np.multiply(np.arange(0, sweep_depth_), 3), 1), 0.001)
+	rate_vals = np.multiply(np.add(np.multiply(np.arange(0, sweep_depth), 3), 1), 0.001)
 	
-	for hypers in arr_:
-		for rate_val in rate_vals:
-			temp = hypers
-			temp["learning_rate_init"] = rate_val
-			out_arr.append(temp)
+	for rate_val in rate_vals:
+		temp_ = {}
+		temp_["learning_rate_init"] = rate_val
+		out_arr.append(temp_)
+	
 	return out_arr
+
+def tune_hyperparams():
+	global need_tuning_hyperparams
+	global sweep_depth
+	global hyperparam_tuning_message
+	
+	def null():
+		return []
+	
+	tuning_funcs = {
+		"Model Architecture": generate_architecture,
+		"Activation": generate_activation,
+		"Regularization": generate_regularization_hyperparams,
+		"Learning Rate": generate_learning_rate_hyperparams,
+		"Solver": generate_solver,
+	}
+	
+	best_hyperparams = {}
+	
+	for hyperparam_ in possible_hyperparams:
+		if need_tuning_hyperparams[hyperparam_]:
+			hyperparam_tuning_message.write(hyperparam_)
+			best_ = search(tuning_funcs[hyperparam_](), sweep_depth)
+			for key in best_:
+				best_hyperparams[key] = best_[key]
+	
+	return best_hyperparams
+
 
 with model_col1:
 	st.subheader("Training")
@@ -461,14 +511,19 @@ with model_col1:
 	
 	if hyperparam_tuning:
 		with st.expander("Hyperparameter Tuning", True):
-			st.write("Tuned hyperparameters may optionally be applied to your model")
+			st.write("Hyperparemeter tuning is still being developed. Results must be manually applied.")
+			hyperparam_tuning_message = st.empty()
+			hyperparam_tuning_bar = st.empty()
 			sweep_depth = st.slider("Sweep Depth", 1, 10, value=5)
-			possible_hyperparams = ["Layer Size", "Model Depth", "Regularization", "Learning Rate"]
+			possible_hyperparams = ["Activation", "Regularization", "Learning Rate", "Solver"]
+			# possible_hyperparams = ["Model Architecture", "Activation", "Regularization", "Learning Rate", "Solver"]
 			need_tuning_hyperparams = {}
 			for possible_hyperparam in possible_hyperparams:
 				need_tuning_hyperparams[possible_hyperparam] = st.checkbox(possible_hyperparam)
 			if st.button("Run Sweep"):
-				st.info("Coming soon")
+				st.info(tune_hyperparams())
+				hyperparam_tuning_message.empty()
+				hyperparam_tuning_bar.empty()
 
 with model_col2:
 	st.subheader("Evaluation")
